@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static check for the privacy process filter in system/manager/process_config.py."""
+"""Static check for the local privacy process filter in system/manager/process_config.py."""
 from pathlib import Path
 import sys
 
