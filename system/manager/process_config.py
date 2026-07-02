@@ -201,4 +201,30 @@ if os.path.exists("../../third_party/copyparty/copyparty-sfx.py"):
   copyparty_args += ["-q"]
   procs += [NativeProcess("copyparty-sfx", "third_party/copyparty", ["./copyparty-sfx.py", *copyparty_args], and_(only_offroad, use_copyparty))]
 
+
+# >>> SP_PRIVACY_NO_CLOUD_PATCH
+# Privacy fork: do not start cloud upload, remote-connect, livestream, or
+# sunnylink network processes unless explicitly re-enabled for development with:
+#   SP_ALLOW_CLOUD_UPLOADS=1
+# This intentionally preserves local logging, encoderd, driver monitoring,
+# controlsd, pandad, and panda safety enforcement.
+SP_CLOUD_UPLOAD_PROCESS_NAMES = {
+    # comma/openpilot cloud + remote access
+    "manage_athenad",
+    "uploader",
+    "stream_encoderd",
+    "webrtcd",
+    "statsd",
+    "feedbackd",
+    # sunnypilot/sunnylink cloud + remote configuration + uploader
+    "manage_sunnylinkd",
+    "sunnylink_registration_manager",
+    "statsd_sp",
+    "backup_manager",
+    "sunnylink_uploader",
+}
+if os.getenv("SP_ALLOW_CLOUD_UPLOADS", "").lower() not in ("1", "true", "yes", "on"):
+    procs = [p for p in procs if getattr(p, "name", None) not in SP_CLOUD_UPLOAD_PROCESS_NAMES]
+# <<< SP_PRIVACY_NO_CLOUD_PATCH
+
 managed_processes = {p.name: p for p in procs}
