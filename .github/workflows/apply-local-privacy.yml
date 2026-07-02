@@ -1,0 +1,81 @@
+name: Apply local privacy overlay
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to create or update with privacy/submodule changes
+        required: true
+        default: privacy-subaru-crosstrek
+      base_ref:
+        description: Base ref to start from, usually your sunnypilot branch
+        required: true
+        default: master
+      opendbc_fork_url:
+        description: Optional opendbc fork URL, e.g. https://github.com/YOUR_USER/opendbc.git
+        required: false
+        default: "https://github.com/iwouldratherbeatthebeach/opendbc.git"
+      opendbc_branch:
+        description: Optional opendbc branch/ref containing Subaru Crosstrek LKAS changes
+        required: false
+        default: subaru-crosstrek-wilderness-lkas-angle
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sunnypilot fork
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base_ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create/update target branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: git checkout -B "$TARGET_BRANCH"
+
+      - name: Apply local privacy process filter
+        run: |
+          python3 scripts/apply_sunnypilot_privacy_patch.py
+          python3 scripts/verify_no_cloud_processes.py
+
+      - name: Optionally point opendbc_repo submodule at your opendbc fork branch
+        if: ${{ inputs.opendbc_fork_url != '' }}
+        env:
+          OPENDBC_FORK_URL: ${{ inputs.opendbc_fork_url }}
+          OPENDBC_BRANCH: ${{ inputs.opendbc_branch }}
+        run: |
+          if [ ! -d opendbc_repo ]; then
+            echo "opendbc_repo submodule not found in this branch. Nothing to update."
+            exit 1
+          fi
+          git submodule update --init --recursive opendbc_repo
+          git -C opendbc_repo remote set-url origin "$OPENDBC_FORK_URL"
+          git -C opendbc_repo fetch origin "$OPENDBC_BRANCH"
+          git -C opendbc_repo checkout FETCH_HEAD
+          git add opendbc_repo
+          git -C opendbc_repo log -1 --oneline
+
+      - name: Commit changes
+        run: |
+          git add system/manager/process_config.py scripts docs .github || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "privacy: disable cloud and sunnylink upload processes by default"
+          fi
+
+      - name: Push target branch
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: git push --force-with-lease origin "$TARGET_BRANCH"
